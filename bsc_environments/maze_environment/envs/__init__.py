@@ -1,1 +1,1 @@
-from maze_environment.envs.bsc_maze import BscMazeEnv
+from maze_environment.envs.bsc_maze_v0 import BscMazeEnv as BscMazeEnvV0

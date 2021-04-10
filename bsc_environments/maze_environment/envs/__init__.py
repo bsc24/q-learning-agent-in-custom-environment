@@ -1,0 +1,1 @@
+from maze_environment.envs.bsc_maze import BscMazeEnv

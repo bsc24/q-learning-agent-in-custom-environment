@@ -1,22 +1,9 @@
-import time
-
 import gym
-import random
-import os
 import numpy as np
-from IPython.display import clear_output
-from gym.envs.registration import register
-
-try:
-    register(
-        id='FrozenLakeNoSlip-v0',
-        entry_point='gym.envs.toy_text:FrozenLakeEnv',
-        kwargs={'map_name' : '4x4', 'is_slippery':False},
-        max_episode_steps=100,
-        reward_threshold=0.78, # optimum = .8196
-    )
-except:
-    pass
+import os
+import random
+import sys
+import time
 
 
 class Agent():
@@ -32,16 +19,6 @@ class Agent():
             print("Action range:", self.action_low, self.action_high)
 
     def get_action(self, state):
-        # cart_position = state[0]
-        # cart_velocity = state[1]
-        # pole_angle = state[2]
-        # pole_velocity = state[3]
-        # number = cart_position + cart_velocity + pole_angle + pole_velocity
-        #
-        # if (number < 0):
-        #     action = 0
-        # else:
-        #     action = 1
         if (self.is_discrete):
             action = random.choice(range(self.action_size))
         else:
@@ -50,7 +27,7 @@ class Agent():
 
 
 class QAgent(Agent):
-    def __init__(self, env, discount_rate=0.97, learning_rate=0.01):
+    def __init__(self, env, discount_rate=0.97, learning_rate=0.01, q_table_file=None):
         super().__init__(env)
         self.state_size = env.observation_space.n
         print("State size:", self.state_size)
@@ -58,10 +35,31 @@ class QAgent(Agent):
         self.eps = 1.0
         self.discount_rate = discount_rate
         self.learning_rate = learning_rate
-        self.build_model()
+        if (q_table_file is not None):
+            self.load_model(q_table_file)
+        else:
+            self.build_model()
 
     def build_model(self):
         self.q_table = 1e-4*np.random.random([self.state_size, self.action_size])
+
+    def load_model(self, file_location):
+        try:
+            file = open(file_location)
+        except FileNotFoundError:
+            print("Could not find map name matching provided name:" + map_name)
+            print("Building new model instead")
+            self.build_model()
+        except:
+            print("Some un-caught exception occurred in load_model()")
+            exit(1)
+
+        table = []
+        for line in file.readlines():
+            actions_values = line.split(",")[:4]    # When saved, the q-table states have an extra comma (,) at the end of each line
+            table.append(np.array(actions_values, dtype=np.float64))
+
+        self.q_table = np.array(table)
 
     def get_action(self, state):
         q_state = self.q_table[state]
@@ -88,16 +86,26 @@ class QAgent(Agent):
             self.eps = self.eps * 0.99
 
 
-# env_name = 'CartPole-v0'
-# env_name = 'MountainCarContinuous-v0'
-# env_name = 'Acrobot-v1'
-# env_name = "FrozenLakeNoSlip-v0"
-# env_name = "FrozenLake-v0"
 env_name = 'maze_environment:BscMaze-v0'
 env = gym.make(env_name)
 
-# agent = Agent(env)
-agent = QAgent(env, learning_rate=0.1)
+# Checking to try and load a q-table from a provided file
+if (len(sys.argv) > 1):
+    map_name = sys.argv[1]
+    directory = "maps_and_qtables/" + map_name + "/qtable.txt"
+    agent = QAgent(env, directory, learning_rate=0.1)
+else:
+    agent = QAgent(env, learning_rate=0.1)
+
+
+# This is used after agent is completed to write the q table to a file
+time_made = time.localtime(time.time())
+time_made = str(time_made[0]) + "_" \
+            + str(time_made[2]) + "_" \
+            + str(time_made[3]) + "_" \
+            + str(time_made[4]) + "_" \
+            + str(time_made[5])
+
 
 rewards_list = []
 debug = False
@@ -140,5 +148,20 @@ print("Final Q-Table:")
 print(agent.q_table)
 
 
+# Writing q-table to file
+directory = "maps_and_qtables/" + time_made
+if (not os.path.isdir(directory)):
+    os.mkdir(directory)
+file = open(directory + "/qtable.txt", "w")
+q_table = agent.q_table
+print(type(q_table))
+for row in q_table:
+    print(type(row))
+    for entry in row:
+        file.write(str(entry) + ',')
+        print(type(entry))
+    file.write("\n")
+
+file.close()
 
 env.close()

@@ -5,7 +5,6 @@ import random
 import sys
 import time
 
-
 class Agent():
     def __init__(self, env):
         self.is_discrete = type(env.action_space) == gym.spaces.discrete.Discrete
@@ -27,29 +26,31 @@ class Agent():
 
 
 class QAgent(Agent):
-    def __init__(self, env, discount_rate=0.97, learning_rate=0.01, q_table_file=None):
+    def __init__(self, env, map_name=None, discount_rate=0.97, learning_rate=0.01, eps=1.0):
         super().__init__(env)
         self.state_size = env.observation_space.n
         print("State size:", self.state_size)
 
-        self.eps = 1.0
+        self.eps = eps
         self.discount_rate = discount_rate
         self.learning_rate = learning_rate
-        if (q_table_file is not None):
-            self.load_model(q_table_file)
+        if map_name is not None:
+            self.load_model(map_name)
         else:
             self.build_model()
 
     def build_model(self):
         self.q_table = 1e-4*np.random.random([self.state_size, self.action_size])
 
-    def load_model(self, file_location):
+    def load_model(self, map_name):
+        file_location = "maps_and_qtables/" + map_name + "/qtable.txt"
         try:
             file = open(file_location)
         except FileNotFoundError:
-            print("Could not find map name matching provided name:" + map_name)
+            print("Could not find model matching provided name:" + map_name)
             print("Building new model instead")
             self.build_model()
+            return
         except:
             print("Some un-caught exception occurred in load_model()")
             exit(1)
@@ -86,82 +87,145 @@ class QAgent(Agent):
             self.eps = self.eps * 0.99
 
 
-env_name = 'maze_environment:BscMaze-v0'
-env = gym.make(env_name)
+env_name = 'maze_environment:BscMaze-v1'
+
+learn_rate = 1.0
+epsilon_value = 1.0
 
 # Checking to try and load a q-table from a provided file
 if (len(sys.argv) > 1):
-    map_name = sys.argv[1]
-    directory = "maps_and_qtables/" + map_name + "/qtable.txt"
-    agent = QAgent(env, directory, learning_rate=0.1)
+    map_name = sys.argv[-1]
+    file_location = "maps_and_qtables/" + map_name + "/map.txt"
+    try:
+        file = open(file_location)
+    except FileNotFoundError:
+        print("Could not find map name matching provided name:" + map_name)
+        exit(1)
+    except:
+        print("Some un-caught exception occurred in load_model()")
+        exit(1)
+
+    desc = []
+    start_state = 0
+    for line in file.readlines():
+        if (line[0] == "s"):
+            start_state = int(line[1:])
+            continue
+
+        holder = ""
+        for entry in line.split(',')[:-1]:
+            holder += entry
+        desc.append(holder)
+
+    env = gym.make(env_name, start_state=start_state, desc=desc)
+    # print("Starting at state: " + str(start_state))
+    agent = QAgent(env, map_name, learning_rate=learn_rate, eps=epsilon_value)
+    del(desc, map_name)
 else:
-    agent = QAgent(env, learning_rate=0.1)
+    env = gym.make(env_name)
+    agent = QAgent(env, learning_rate=learn_rate, eps=epsilon_value)
 
-
+# exit(4)
 # This is used after agent is completed to write the q table to a file
-time_made = time.localtime(time.time())
-time_made = str(time_made[0]) + "_" \
-            + str(time_made[2]) + "_" \
-            + str(time_made[3]) + "_" \
-            + str(time_made[4]) + "_" \
-            + str(time_made[5])
+time_started = time.time()
 
 
-rewards_list = []
-debug = False
 num_trials = 1000
-total_reward = 0
-rewardCounter = 0
+total_attempts = 0
+total_successes = 0
+consecutive_success_counter = 0
+actions = {
+    0: "Left",
+    1: "Down",
+    2: "Right",
+    3: "Up"
+}
 # while True:
 for trial in range(num_trials):
     state = env.reset()
+    # visited_states = []
     t = 0
     done = False
+    current_reward = 0
     while not done:
         action = agent.get_action(state)
         next_state, reward, done, info = env.step(action)
         agent.train((state, action, next_state, reward, done))
         state = next_state
-        total_reward += reward
+        # if state not in visited_states and not done:
+        #     reward +=0.5
+        #     visited_states.append(state)
+        current_reward += reward
 
-        print("s:", state, "a:", action)
-        print("Episode: {}, Total reward: {}, Eps: {}".format(trial, total_reward, agent.eps))
+        # print("s:", state, "a:", action)
+        print("Episode: {}, Episodes without incident: {}, Total successes: {}, Eps: {}"
+              .format(trial, consecutive_success_counter, total_successes, agent.eps))
+        print("Current state: {}, Steps taken this run: {}, Last action: {},  Reward this run: {}"
+              .format(state, actions[action], t, current_reward))
+
         env.render()
-        print(agent.q_table)
+        # print(agent.q_table)
         time.sleep(0.1)
-        #clear_output(wait=True)
         os.system('CLS')
+        t+= 1
+        if (t == 100):
+            done = True
+            agent.eps = agent.eps * 0.95
 
-    if (reward == 1):
-        rewardCounter += 1
+    total_attempts += 1
+    if done and reward == 10:
+        consecutive_success_counter += 1
+        total_successes += 1
     else:
-        rewardCounter = 0
-    rewards_list.append(total_reward)
+        consecutive_success_counter = 0
     # print("Trial:", trial, "\nReward:", total_reward)
-    if (rewardCounter == 100):
+    if (consecutive_success_counter == 100):
+        print("Agent has solved the puzzle.")
         break
 
 os.system('CLS')
-print("Agent has solved the puzzle.")
-print("Total reward achieved by agent: {}".format(total_reward))
+time_finished = time.time()
+print("Total attempts by the agent: {}".format(total_attempts))
+print("Total successes achieved by agent: {}".format(total_successes))
+print("Time taken (in seconds): {}".format(time_finished-time_started))
 print("Final Q-Table:")
 print(agent.q_table)
 
-
-# Writing q-table to file
-directory = "maps_and_qtables/" + time_made
+time_name = time.localtime(time.time())
+time_name = str(time_name[0]) + "_" \
+               + str(time_name[2]) + "_" \
+               + str(time_name[3]) + "_" \
+               + str(time_name[4]) + "_" \
+               + str(time_name[5])
+directory = "maps_and_qtables/" + time_name
 if (not os.path.isdir(directory)):
     os.mkdir(directory)
+
+# Writing statistics from agent
+file = open(directory + "/stats.txt", "w")
+file.write("Total attempts by the agent: {}".format(total_attempts))
+file.write("Total successes achieved by agent: {}".format(total_successes))
+file.write("Time taken (in seconds): {}".format(time_finished-time_started))
+file.write("Final Q-Table:")
+file.close()
+
+# Writing q-table to file
 file = open(directory + "/qtable.txt", "w")
 q_table = agent.q_table
-print(type(q_table))
 for row in q_table:
-    print(type(row))
     for entry in row:
         file.write(str(entry) + ',')
-        print(type(entry))
     file.write("\n")
-
 file.close()
+
+
+# Writing map to file
+file = open(directory + "/map.txt", 'w')
+for row in env.desc:
+    for entry in row:
+        file.write(entry.decode('UTF-8') + ',')
+    file.write("\n")
+file.close()
+
 
 env.close()

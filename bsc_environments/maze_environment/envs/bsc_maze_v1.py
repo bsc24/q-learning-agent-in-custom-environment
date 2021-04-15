@@ -70,6 +70,8 @@ class BscMazeEnv(discrete.DiscreteEnv):
 
     NEW:
         U, D, R, L : Move either (U)p, (D)own, (R)ight, or (L)eft when this tile is stepped on
+        C : Continue in direction; if moving down on this tile continue down again, if moving right on this tile continue right again, etc
+        W : Wall, attempting to move into a tile with a wall results in nothing happening
 
     The episode ends when you reach the goal or fall in a hole.
     You receive a reward of 10 if you reach the goal, and -1 for falling into a hole.
@@ -77,13 +79,15 @@ class BscMazeEnv(discrete.DiscreteEnv):
 
     metadata = {'render.modes': ['human', 'ansi']}
 
-    def __init__(self, desc=None, is_slippery=False):
+    def __init__(self, desc=None, start_state=0, is_slippery=False):
 
         if desc is None:           # If we aren't given a map name or desc, generate a random one
             desc = generate_random_map()          # desc now holds a list of strings where each string is a row in the map
 
         self.desc = desc = np.asarray(desc, dtype='c')          # desc is being turned from a list of strings into a numpy array
+        self.start_state = start_state
         self.nrow, self.ncol = nrow, ncol = desc.shape          # self.nrow = nrow = desc.shape[0]      self.ncol = ncol = desc.shape[1]
+        print(nrow, ncol)
         self.reward_range = (0, 1)
 
         nA = 4          # At each state, there are 4 possible actions (moving either left, down, right, or up)
@@ -131,11 +135,11 @@ class BscMazeEnv(discrete.DiscreteEnv):
                     if letter in b'GH':         # If we reach the Goal or Hole, we are done
                         li.append((1.0, s, 0, True))
                     else:
-                        if letter in b'LDRU':
-                            li.append((
-                                1., *update_probability_matrix(row, col, ACTIONS[letter])
-                                ))
-                        elif is_slippery:     # if the ice is slippery, an action has an equal chance of going either the right way or in either of the two adjacent directions
+                        # if letter in b'LDRU':
+                        #     li.append((
+                        #         1., *update_probability_matrix(row, col, ACTIONS[letter])
+                        #         ))
+                        if is_slippery:     # if the ice is slippery, an action has an equal chance of going either the right way or in either of the two adjacent directions
                             for b in [(a - 1) % 4, a, (a + 1) % 4]:         # ^For example, action down is equally likely to go left, right, or down; going right is equally likely to go up, down, or right
                                 li.append((
                                     1. / 3.,            # 1/3 chance
@@ -147,11 +151,12 @@ class BscMazeEnv(discrete.DiscreteEnv):
                             ))
 
         super(BscMazeEnv, self).__init__(nS, nA, P, isd)         # nS = number of states, nA = number of actions, P = transitions, isd = initial state distribution
+        self.s = self.start_state
 
 
     def step(self, a):
         transitions = self.P[self.s][a]
-        print(transitions)
+        # print(transitions)
         i = discrete.categorical_sample([t[0] for t in transitions], self.np_random)
         p, s, r, d = transitions[i]
 
@@ -159,16 +164,34 @@ class BscMazeEnv(discrete.DiscreteEnv):
         col = s - (row * self.nrow)
         letter = self.desc[row, col]
 
-        if letter in b'LDRU':
-            a = ACTIONS[letter]
-            p, s, r, d = self.P[s][a][0]
-        elif letter == b'C':
-            p, s, r, d = self.P[s][a][0]
+        while letter in b'CLDRU':
+            last_s = s
+            if letter in b'LDRU':
+                a = ACTIONS[letter]
+                p, s, r, d = self.P[s][a][0]
+            elif letter == b'C':
+                p, s, r, d = self.P[s][a][0]        # 'C' makes the agent continue in the direction it last moved in
+
+            row = s // self.nrow
+            col = s - (row * self.nrow)
+            letter = self.desc[row, col]
+
+            if (last_s == s):       # If we tried moving again but it put us at the same state, we tried to walk off the edge of the map and should stop trying
+                break
+
+        if letter == b'W':          # When we hit a wall, we walk into it then step back out
+            reverse_a = (a + 2) % 4
+            p, s, r, d = self.P[s][reverse_a][0]
 
         self.s = s
         self.lastaction = a
         return (int(s), r, d, {"prob": p})
 
+
+    def reset(self):
+        self.s = self.start_state
+        self.lastaction = None
+        return int(self.s)
 
 
     def render(self, mode='human'):

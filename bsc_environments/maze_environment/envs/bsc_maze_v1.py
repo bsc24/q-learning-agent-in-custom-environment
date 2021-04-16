@@ -18,27 +18,48 @@ ACTIONS = {
     b'U':UP
 }
 
-def generate_random_map(size=8, p=0.8):
+def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_continue=0.2):
     """Generates a random valid map (one that has a path from start to goal)
     :param size: size of each side of the grid
-    :param p: probability that a tile is frozen
+    :param p_tile: probability that a tile is an empty tile (F)
+    :param p_direction: probability that a tile is a direction tile tile (LDRU)
+    :param p_continue: probability that a tile is a continue tile (C)
     """
     valid = False
+
+    def in_bounds(r, c):
+        return r >= 0 and r < size and c >= 0 and c < size
 
     # DFS to check that it's a valid path.
     def is_valid(res):
         frontier, discovered = [], set()
         frontier.append((0, 0))
         while frontier:
-            r, c = frontier.pop()
+            r, c = frontier.pop()       # state at r,c where r is row and c is column
             if not (r, c) in discovered:
                 discovered.add((r, c))
-                directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+                directions = [(0, -1), (-1, 0), (0, 1), (1, 0)]     # These are in order of LDRU
+
+                if res[r][c] in "LDRU":
+                    directions = [directions[ACTIONS[res[r][c].encode("UTF-8")]]]
+
                 for x, y in directions:
                     r_new = r + x
                     c_new = c + y
-                    if r_new < 0 or r_new >= size or c_new < 0 or c_new >= size:
+
+                    if not in_bounds(r_new, c_new):
                         continue
+
+                    while res[r_new][c_new] == 'C':     # Continue tiles will keep moving in whatever direction they were moving in
+                        r_new += x
+                        c_new += y
+                        if not in_bounds(r_new, c_new):
+                            r_new -= x
+                            c_new -= y
+                            break
+                    if res[r_new][c_new] == 'W':        # If we walk into a wall tile, step back one
+                        r_new -= x
+                        c_new -= y
                     if res[r_new][c_new] == 'G':
                         return True
                     if (res[r_new][c_new] != 'H'):
@@ -46,8 +67,12 @@ def generate_random_map(size=8, p=0.8):
         return False
 
     while not valid:
+        p = p_tile + p_direction + p_continue
+        p_direction = p_direction/4
         p = min(1, p)
-        res = np.random.choice(['F', 'H'], (size, size), p=[p, 1-p])
+        res = np.random.choice(['F', 'L', 'D', 'R', 'U', 'C', 'H'],
+                               (size, size),
+                               p=[p_tile, p_direction, p_direction, p_direction, p_direction, p_continue, 1-p])
         res[0][0] = 'S'
         res[-1][-1] = 'G'
         valid = is_valid(res)
@@ -135,10 +160,6 @@ class BscMazeEnv(discrete.DiscreteEnv):
                     if letter in b'GH':         # If we reach the Goal or Hole, we are done
                         li.append((1.0, s, 0, True))
                     else:
-                        # if letter in b'LDRU':
-                        #     li.append((
-                        #         1., *update_probability_matrix(row, col, ACTIONS[letter])
-                        #         ))
                         if is_slippery:     # if the ice is slippery, an action has an equal chance of going either the right way or in either of the two adjacent directions
                             for b in [(a - 1) % 4, a, (a + 1) % 4]:         # ^For example, action down is equally likely to go left, right, or down; going right is equally likely to go up, down, or right
                                 li.append((
@@ -156,7 +177,6 @@ class BscMazeEnv(discrete.DiscreteEnv):
 
     def step(self, a):
         transitions = self.P[self.s][a]
-        # print(transitions)
         i = discrete.categorical_sample([t[0] for t in transitions], self.np_random)
         p, s, r, d = transitions[i]
 

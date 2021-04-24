@@ -18,7 +18,7 @@ ACTIONS = {
     b'U':UP
 }
 
-def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_continue=0.2):
+def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_continue=0.3):
     """Generates a random valid map (one that has a path from start to goal)
     :param size: size of each side of the grid
     :param p_tile: probability that a tile is an empty tile (F)

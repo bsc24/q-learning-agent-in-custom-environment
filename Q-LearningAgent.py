@@ -89,7 +89,8 @@ class QAgent(Agent):
 
 env_name = 'maze_environment:BscMaze-v1'
 
-learn_rate = 1.0
+start_state = 0
+learn_rate = 0.01
 epsilon_value = 1.0
 
 # Checking to try and load a q-table from a provided file
@@ -106,10 +107,12 @@ if (len(sys.argv) > 1):
         exit(1)
 
     desc = []
-    start_state = 0
     for line in file.readlines():
         if (line[0] == "s"):
             start_state = int(line[1:])
+            continue
+        elif (line[0:2] == "ep"):
+            epsilon_value = float(line[2:])
             continue
 
         holder = ""
@@ -129,7 +132,7 @@ else:
 # This is used after agent is completed to write the q table to a file
 time_started = time.time()
 
-
+output = True
 num_trials = 1000
 total_attempts = 0
 total_successes = 0
@@ -143,34 +146,34 @@ actions = {
 # while True:
 for trial in range(num_trials):
     state = env.reset()
-    # visited_states = []
+    # visited = []
     t = 0
     done = False
     current_reward = 0
     while not done:
         action = agent.get_action(state)
         next_state, reward, done, info = env.step(action)
+        # if state not in visited:
+        #     visited.append(state)
+        #     reward += 0.5
         agent.train((state, action, next_state, reward, done))
         state = next_state
-        # if state not in visited_states and not done:
-        #     reward +=0.5
-        #     visited_states.append(state)
         current_reward += reward
 
-        # print("s:", state, "a:", action)
-        print("Episode: {}, Episodes without incident: {}, Total successes: {}, Eps: {}"
-              .format(trial, consecutive_success_counter, total_successes, agent.eps))
-        print("Current state: {}, Steps taken this run: {}, Last action: {},  Reward this run: {}"
-              .format(state, actions[action], t, current_reward))
+        if (output):
+            print("Episode: {}, Episodes without incident: {}, Total successes: {}, Eps: {}"
+                  .format(trial, consecutive_success_counter, total_successes, agent.eps))
+            print("Current state: {}, Steps taken this run: {}, Last action: {}"
+                  .format(state, t, actions[action]))
 
-        env.render()
-        # print(agent.q_table)
-        time.sleep(0.1)
-        os.system('CLS')
+            env.render()
+            # print(agent.q_table)
+            time.sleep(0.1)
+            os.system('CLS')
         t+= 1
         if (t == 100):
             done = True
-            agent.eps = agent.eps * 0.95
+            agent.eps = agent.eps * 0.99
 
     total_attempts += 1
     if done and reward == 10:
@@ -197,16 +200,15 @@ time_name = str(time_name[0]) + "_" \
                + str(time_name[3]) + "_" \
                + str(time_name[4]) + "_" \
                + str(time_name[5])
-directory = "maps_and_qtables/" + time_name
+directory = "maps_and_qtables/results/" + time_name
 if (not os.path.isdir(directory)):
     os.mkdir(directory)
 
 # Writing statistics from agent
 file = open(directory + "/stats.txt", "w")
 file.write("Total attempts by the agent: {}".format(total_attempts))
-file.write("Total successes achieved by agent: {}".format(total_successes))
-file.write("Time taken (in seconds): {}".format(time_finished-time_started))
-file.write("Final Q-Table:")
+file.write("\nTotal successes achieved by agent: {}".format(total_successes))
+file.write("\nTime taken (in seconds): {}".format(time_finished-time_started))
 file.close()
 
 # Writing q-table to file
@@ -221,6 +223,8 @@ file.close()
 
 # Writing map to file
 file = open(directory + "/map.txt", 'w')
+file.write("s" + str(start_state) + "\n")
+file.write("ep" + str(agent.eps) + "\n")
 for row in env.desc:
     for entry in row:
         file.write(entry.decode('UTF-8') + ',')

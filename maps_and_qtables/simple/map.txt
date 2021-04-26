@@ -1,0 +1,4 @@
+S,F,F,F,
+H,F,H,H,
+F,F,F,F,
+H,F,H,G,

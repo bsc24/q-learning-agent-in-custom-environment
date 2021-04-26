@@ -18,7 +18,7 @@ ACTIONS = {
     b'U':UP
 }
 
-def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_continue=0.3):
+def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_wall=0.1, p_continue=0.2):
     """Generates a random valid map (one that has a path from start to goal)
     :param size: size of each side of the grid
     :param p_tile: probability that a tile is an empty tile (F)
@@ -67,12 +67,12 @@ def generate_random_map(size=8, p_tile=0.4, p_direction=0.2, p_continue=0.3):
         return False
 
     while not valid:
-        p = p_tile + p_direction + p_continue
+        p = p_tile + p_direction + p_wall + p_continue
         p_direction = p_direction/4
         p = min(1, p)
-        res = np.random.choice(['F', 'L', 'D', 'R', 'U', 'C', 'H'],
+        res = np.random.choice(['F', 'L', 'D', 'R', 'U', 'W', 'C', 'H'],
                                (size, size),
-                               p=[p_tile, p_direction, p_direction, p_direction, p_direction, p_continue, 1-p])
+                               p=[p_tile, p_direction, p_direction, p_direction, p_direction, p_wall, p_continue, 1-p])
         res[0][0] = 'S'
         res[-1][-1] = 'G'
         valid = is_valid(res)

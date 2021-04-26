@@ -1,0 +1,3 @@
+Total attempts by the agent: 481
+Total successes achieved by agent: 419
+Time taken (in seconds): 904.1898128986359

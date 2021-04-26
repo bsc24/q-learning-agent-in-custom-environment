@@ -1,0 +1,10 @@
+s0
+ep0
+S,C,C,F,F,D,C,H,
+H,C,F,C,H,F,F,H,
+H,F,H,F,R,F,F,F,
+H,U,F,C,R,C,R,F,
+C,F,D,F,F,R,H,F,
+F,C,R,F,C,L,F,C,
+F,C,R,F,F,F,F,U,
+H,C,C,F,F,C,F,G,

@@ -1,0 +1,3 @@
+Total attempts by the agent: 100
+Total successes achieved by agent: 0
+Time taken (in seconds): 0.09585833549499512
